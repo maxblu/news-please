@@ -481,8 +481,10 @@ class ElasticsearchStorage(ExtractedInformationStorage):
                 ancestor = None
 
                 # search for previous version
+                # print(item['url'])#mio
                 request = self.es.search(index=self.index_current, body={'query': {'match': {'url.keyword': item['url']}}})
-                if request['hits']['total'] > 0:
+                # print(request)#mio
+                if request['hits']['total']['value'] > 0:#agregree ['value']
                     # save old version into index_archive
                     old_version = request['hits']['hits'][0]
                     old_version['_source']['descendent'] = True
@@ -569,7 +571,75 @@ class DateFilter(object):
             else:
                 return item
 
+##Clase creada por mi adicional para filtrar por keywords
+class KeywordsFilter(object):
+    """
+    Filtra articulos por una lista de keywords dropeando los que no contengan ninguna de ellas.
+    """
 
+    log = None
+    cfg = None
+    # strict_mode = False
+    # start_date = None
+    # end_date = None
+    keywords= None
+     
+
+    def __init__(self):
+        self.log = logging.getLogger(__name__ + '.KeywordsFilter')
+        self.cfg = CrawlerConfig.get_instance()
+        self.config = self.cfg.section("KeywordsFilter")
+        # self.strict_mode = self.config['strict_mode']
+        # self.start_date = self.config['start_date']
+        # self.end_date = self.config['end_date']
+        self.keywords = self.config['keywords']
+
+        if self.keywords is None:
+            self.log.error("Keywords: No keywords are defined, please check the configuration of this module.")
+       
+    def process_item(self, item, spider):
+
+        # Check if date could be extracted
+        # if item['text'] is None and self.strict_mode:
+        if item['article_text'] is None :        
+            raise DropItem('KeyworsFilter : %s: text is missing.' % item['url'])
+        # elif item['article_publish_date'] is None:
+        #     return item
+        else:
+            # Check keywords
+            # try:
+            ok = self.contain_kywords(str(item['article_text']))
+            # except ValueError as error:
+            #     self.log.warning("DateFilter: Extracted date has the wrong format: %s - %s" %
+            #                      (item['article_publishing_date'], item['url']))
+            #     if self.strict_mode:
+            #         raise DropItem('DateFilter: %s: Dropped due to wrong date format: %s' %
+            #                        (item['url'], item['publish_date']))
+            if not ok:
+                raise DropItem('KeywordsFilter: %s: does not contain any given keywords %s' %(item['url'], item['article_title'] ) )
+
+
+            else:
+                return item
+            # # Check interval boundaries
+            # if self.start_date is not None and self.start_date > publish_date:
+            #     raise DropItem('DateFilter: %s: Article is too old: %s' % (item['url'], publish_date))
+            # elif self.end_date is not None and self.end_date < publish_date:
+            #     raise DropItem('DateFilter: %s: Article is too young: %s ' % (item['url'], publish_date))
+            # else:
+            #     return item
+    
+    def contain_kywords(self,text):
+        text = text.split(' ')
+        
+        for word in text:
+            if word.lower()  in self.keywords: 
+                return True 
+        return False 
+
+
+
+##########################################################
 class PandasStorage(ExtractedInformationStorage):
     """
     Store meta data a Pandas data frame
